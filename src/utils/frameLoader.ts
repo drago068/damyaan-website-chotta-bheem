@@ -79,8 +79,8 @@ class FrameLoader {
     // Trigger loading if not yet requested
     this.loadImage(sceneIndex, clampedFrame);
 
-    // Find nearest neighbor in cache to prevent blank flashes
-    for (let offset = 1; offset <= 15; offset++) {
+    // Search outward for ANY loaded frame in this scene to guarantee zero black frames
+    for (let offset = 1; offset <= scene.frameCount; offset++) {
       const lower = clampedFrame - offset;
       if (lower >= 1) {
         const lKey = this.getFrameKey(sceneIndex, lower);
@@ -97,33 +97,45 @@ class FrameLoader {
   }
 
   /**
-   * Preload critical initial frames to allow immediate interactive entry
+   * Preload critical initial frames across all scenes so entering any chapter is 100% instant
    */
   public async preloadInitial(onProgress: (percent: number) => void): Promise<void> {
     const scene0 = SCENES[0];
-    const initialFrameCount = this.isMobile ? 30 : 50;
+    const initialScene0Count = this.isMobile ? 25 : 40;
+    const initialOtherCount = this.isMobile ? 10 : 15;
+    const totalToLoad = initialScene0Count + (SCENES.length - 1) * initialOtherCount;
     let loaded = 0;
 
     const promises: Promise<HTMLImageElement>[] = [];
-    for (let i = 1; i <= Math.min(initialFrameCount, scene0.frameCount); i++) {
+
+    // 1. Preload Scene 0 opening sequence
+    for (let i = 1; i <= Math.min(initialScene0Count, scene0.frameCount); i++) {
       promises.push(
         this.loadImage(0, i).then((img) => {
           loaded++;
-          onProgress(Math.min(95, Math.round((loaded / initialFrameCount) * 100)));
+          onProgress(Math.min(95, Math.round((loaded / totalToLoad) * 100)));
           return img;
         })
       );
     }
 
-    // Also warm up frame 1 of all other scenes for fast thumbnail / transition previews
+    // 2. Preload opening frames for all subsequent chapters (01..06)
     for (let s = 1; s < SCENES.length; s++) {
-      this.loadImage(s, 1);
+      for (let f = 1; f <= initialOtherCount; f++) {
+        promises.push(
+          this.loadImage(s, f).then((img) => {
+            loaded++;
+            onProgress(Math.min(95, Math.round((loaded / totalToLoad) * 100)));
+            return img;
+          })
+        );
+      }
     }
 
     await Promise.all(promises);
     onProgress(100);
 
-    // Kick off progressive background caching
+    // Kick off progressive background caching for remaining frames
     this.startBackgroundStream(0);
   }
 

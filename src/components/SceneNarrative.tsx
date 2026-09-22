@@ -75,7 +75,6 @@ export const SceneNarrative: React.FC<SceneNarrativeProps> = ({
           textAlign: 'center',
           opacity: Math.max(0, Math.min(1, opacity)),
           transform: `translateY(${translateY}px)`,
-          transition: 'opacity 0.2s ease-out, transform 0.2s ease-out',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

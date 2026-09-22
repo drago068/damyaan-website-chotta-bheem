@@ -32,6 +32,8 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
     transitionProgress: transitionProgress,
   });
 
+  const lastImagesRef = useRef<{ [key: number]: HTMLImageElement }>({});
+
   // Keep state updated without re-rendering
   useEffect(() => {
     const scene = SCENES[currentSceneIndex];
@@ -42,7 +44,12 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
       Math.min(scene.frameCount, Math.round(sceneProgress * (scene.frameCount - 1)) + 1)
     );
 
-    frameStateRef.current.currentScene = currentSceneIndex;
+    // If transitioning to a different scene, snap frame position immediately to prevent interpolating across scenes
+    if (frameStateRef.current.currentScene !== currentSceneIndex) {
+      frameStateRef.current.currentScene = currentSceneIndex;
+      frameStateRef.current.currentFrame = targetFrameNumber;
+    }
+
     frameStateRef.current.targetFrame = targetFrameNumber;
     frameStateRef.current.isTransitioning = isTransitioning;
     frameStateRef.current.nextScene = nextSceneIndex;
@@ -91,7 +98,12 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
       cHeight: number,
       alpha: number = 1.0
     ) => {
-      const img = frameLoader.getFrameImage(scene.index, Math.round(frameNum));
+      let img = frameLoader.getFrameImage(scene.index, Math.round(frameNum));
+      if (img && img.complete && img.naturalWidth > 0) {
+        lastImagesRef.current[scene.index] = img;
+      } else if (lastImagesRef.current[scene.index]) {
+        img = lastImagesRef.current[scene.index];
+      }
       if (!img || !img.complete || img.naturalWidth === 0) return;
 
       const isMobile = window.innerWidth < 768;
@@ -187,7 +199,7 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         // Smooth frame interpolation (lerp)
         const frameDiff = state.targetFrame - state.currentFrame;
         // Fast yet smooth response
-        state.currentFrame += frameDiff * 0.30;
+        state.currentFrame += frameDiff * 0.45;
         if (Math.abs(frameDiff) < 0.05) {
           state.currentFrame = state.targetFrame;
         }
