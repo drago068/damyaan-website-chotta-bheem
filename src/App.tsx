@@ -25,77 +25,72 @@ export const App: React.FC = () => {
   const { lenis, scrollTo } = useLenis();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Set up ScrollTrigger instances for each scene
+  // Set up single deterministic scroll engine (eliminates any boundary flicker or event competition)
   useEffect(() => {
-    ScrollTrigger.config({ ignoreMobileResize: true });
+    if (!isLoaded) return;
 
-    // Direct native scroll listener to guarantee 100% responsive frame updating on mobile touch
-    const handleNativeScroll = () => {
-      for (let i = 0; i < SCENES.length; i++) {
-        const el = document.getElementById(`scene-trigger-${i}`);
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= 2 && rect.bottom > 0) {
-          const totalDist = rect.height;
-          const prog = Math.max(0, Math.min(1, -rect.top / totalDist));
-          setCurrentSceneIndex(i);
-          setSceneProgress(prog);
+    const totalWeight = SCENES.reduce((acc, s) => acc + s.scrollWeight, 0);
+    const sceneRanges = SCENES.map((scene, idx) => {
+      const prevWeight = SCENES.slice(0, idx).reduce((acc, s) => acc + s.scrollWeight, 0);
+      const start = prevWeight / totalWeight;
+      const end = (prevWeight + scene.scrollWeight) / totalWeight;
+      return { start, end };
+    });
 
-          if (prog > 0.88 && i < SCENES.length - 1) {
-            setIsTransitioning(true);
-            setNextSceneIndex(i + 1);
-            setTransitionProgress((prog - 0.88) / 0.12);
-          } else {
-            setIsTransitioning(false);
-            setNextSceneIndex(undefined);
-            setTransitionProgress(0);
-          }
+    let ticking = false;
+
+    const syncScroll = () => {
+      const scrollY = window.scrollY;
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (maxScroll <= 0) {
+        ticking = false;
+        return;
+      }
+
+      const globalProgress = Math.max(0, Math.min(1, scrollY / maxScroll));
+
+      // Find active scene deterministically - exactly ONE scene matches
+      let activeIndex = 0;
+      for (let i = 0; i < sceneRanges.length; i++) {
+        if (globalProgress >= sceneRanges[i].start && (globalProgress < sceneRanges[i].end || i === sceneRanges.length - 1)) {
+          activeIndex = i;
           break;
         }
       }
+
+      const range = sceneRanges[activeIndex];
+      const localProg = Math.max(0, Math.min(1, (globalProgress - range.start) / (range.end - range.start)));
+
+      setCurrentSceneIndex(activeIndex);
+      setSceneProgress(localProg);
+
+      // Boundary soft crossfade
+      if (localProg > 0.92 && activeIndex < SCENES.length - 1) {
+        setIsTransitioning(true);
+        setNextSceneIndex(activeIndex + 1);
+        setTransitionProgress((localProg - 0.92) / 0.08);
+      } else {
+        setIsTransitioning(false);
+        setNextSceneIndex(undefined);
+        setTransitionProgress(0);
+      }
+
+      ticking = false;
     };
 
-    window.addEventListener('scroll', handleNativeScroll, { passive: true });
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(syncScroll);
+        ticking = true;
+      }
+    };
 
-    const timer = setTimeout(() => {
-      ScrollTrigger.refresh();
-
-      SCENES.forEach((_, index) => {
-        const sectionEl = document.getElementById(`scene-trigger-${index}`);
-        if (!sectionEl) return;
-
-        ScrollTrigger.create({
-          trigger: sectionEl,
-          start: 'top top',
-          end: 'bottom top',
-          scrub: true,
-          onUpdate: (self) => {
-            const prog = self.progress;
-
-            if (self.isActive) {
-              setCurrentSceneIndex(index);
-              setSceneProgress(prog);
-
-              if (prog > 0.88 && index < SCENES.length - 1) {
-                setIsTransitioning(true);
-                setNextSceneIndex(index + 1);
-                const tProg = (prog - 0.88) / 0.12;
-                setTransitionProgress(tProg);
-              } else {
-                setIsTransitioning(false);
-                setNextSceneIndex(undefined);
-                setTransitionProgress(0);
-              }
-            }
-          },
-        });
-      });
-    }, 150);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    // Initial sync
+    syncScroll();
 
     return () => {
-      clearTimeout(timer);
-      window.removeEventListener('scroll', handleNativeScroll);
-      ScrollTrigger.getAll().forEach((st) => st.kill());
+      window.removeEventListener('scroll', onScroll);
     };
   }, [isLoaded]);
 
@@ -119,10 +114,12 @@ export const App: React.FC = () => {
 
   const handleSelectScene = useCallback(
     (index: number) => {
-      const sectionEl = document.getElementById(`scene-trigger-${index}`);
-      if (sectionEl) {
-        scrollTo(sectionEl, { offset: 0, duration: 1.4 });
-      }
+      const totalWeight = SCENES.reduce((acc, s) => acc + s.scrollWeight, 0);
+      const prevWeight = SCENES.slice(0, index).reduce((acc, s) => acc + s.scrollWeight, 0);
+      const targetProg = prevWeight / totalWeight;
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const targetY = Math.round(targetProg * maxScroll);
+      scrollTo(targetY, { offset: 0, duration: 1.2 });
     },
     [scrollTo]
   );

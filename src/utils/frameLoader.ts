@@ -79,17 +79,19 @@ class FrameLoader {
     // Trigger loading if not yet requested
     this.loadImage(sceneIndex, clampedFrame);
 
-    // Search outward for ANY loaded frame in this scene to guarantee zero black frames
-    for (let offset = 1; offset <= scene.frameCount; offset++) {
-      const lower = clampedFrame - offset;
-      if (lower >= 1) {
-        const lKey = this.getFrameKey(sceneIndex, lower);
-        if (this.cache.has(lKey)) return this.cache.get(lKey)!;
+    // 1. Monotonic backward search: hold the most recent loaded past frame (<= clampedFrame)
+    for (let f = clampedFrame - 1; f >= 1; f--) {
+      const k = this.getFrameKey(sceneIndex, f);
+      if (this.cache.has(k)) {
+        return this.cache.get(k)!;
       }
-      const upper = clampedFrame + offset;
-      if (upper <= scene.frameCount) {
-        const uKey = this.getFrameKey(sceneIndex, upper);
-        if (this.cache.has(uKey)) return this.cache.get(uKey)!;
+    }
+
+    // 2. If no past frame is loaded yet, find earliest available future frame (>= clampedFrame)
+    for (let f = clampedFrame + 1; f <= scene.frameCount; f++) {
+      const k = this.getFrameKey(sceneIndex, f);
+      if (this.cache.has(k)) {
+        return this.cache.get(k)!;
       }
     }
 
@@ -97,31 +99,20 @@ class FrameLoader {
   }
 
   /**
-   * Preload critical initial frames across all scenes so entering any chapter is 100% instant
+   * Preload critical initial frames (1..50) across all scenes so entering any chapter
+   * and the entire sequence before and during the title card is 100% cached in memory
    */
   public async preloadInitial(onProgress: (percent: number) => void): Promise<void> {
-    const scene0 = SCENES[0];
-    const initialScene0Count = this.isMobile ? 25 : 40;
-    const initialOtherCount = this.isMobile ? 10 : 15;
-    const totalToLoad = initialScene0Count + (SCENES.length - 1) * initialOtherCount;
+    const openingFramesCount = 50;
+    const totalToLoad = SCENES.reduce((acc, s) => acc + Math.min(openingFramesCount, s.frameCount), 0);
     let loaded = 0;
 
     const promises: Promise<HTMLImageElement>[] = [];
 
-    // 1. Preload Scene 0 opening sequence
-    for (let i = 1; i <= Math.min(initialScene0Count, scene0.frameCount); i++) {
-      promises.push(
-        this.loadImage(0, i).then((img) => {
-          loaded++;
-          onProgress(Math.min(95, Math.round((loaded / totalToLoad) * 100)));
-          return img;
-        })
-      );
-    }
-
-    // 2. Preload opening frames for all subsequent chapters (01..06)
-    for (let s = 1; s < SCENES.length; s++) {
-      for (let f = 1; f <= initialOtherCount; f++) {
+    for (let s = 0; s < SCENES.length; s++) {
+      const scene = SCENES[s];
+      const count = Math.min(openingFramesCount, scene.frameCount);
+      for (let f = 1; f <= count; f++) {
         promises.push(
           this.loadImage(s, f).then((img) => {
             loaded++;
@@ -147,7 +138,7 @@ class FrameLoader {
     this.currentActiveScene = sceneIndex;
     this.startBackgroundStream(sceneIndex);
 
-    // Prune distant frames on mobile to save memory
+    // Prune distant frames on mobile to save memory (while preserving opening 50 frames)
     if (this.isMobile) {
       this.pruneDistantScenes(sceneIndex);
     }
@@ -175,8 +166,8 @@ class FrameLoader {
       const sIdx = priorityScenes[currentPriorityIdx];
       const scene = SCENES[sIdx];
 
-      // On mobile, skip every other frame during background prefetch to conserve memory and bandwidth
-      const step = this.isMobile ? 2 : 1;
+      // Load consecutive frames without skipping for buttery smooth 60fps playback everywhere
+      const step = 1;
 
       while (currentFrame <= scene.frameCount) {
         const frameToLoad = currentFrame;
@@ -200,10 +191,15 @@ class FrameLoader {
   }
 
   private pruneDistantScenes(centerSceneIndex: number) {
-    // Keep cached frames within distance <= 1
+    // Keep cached frames within distance <= 1, BUT ALWAYS preserve opening 50 frames of all scenes!
     for (const [key] of this.cache.entries()) {
-      const [sIdxStr] = key.split('_');
+      const [sIdxStr, fNumStr] = key.split('_');
       const sIdx = parseInt(sIdxStr, 10);
+      const fNum = parseInt(fNumStr, 10);
+
+      // Pin opening 50 frames of EVERY scene forever
+      if (fNum <= 50) continue;
+
       if (Math.abs(sIdx - centerSceneIndex) > 1) {
         this.cache.delete(key);
       }

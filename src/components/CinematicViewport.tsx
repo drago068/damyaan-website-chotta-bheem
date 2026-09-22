@@ -33,6 +33,7 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
   });
 
   const lastImagesRef = useRef<{ [key: number]: HTMLImageElement }>({});
+  const lastRenderedImgRef = useRef<HTMLImageElement | null>(null);
 
   // Keep state updated without re-rendering
   useEffect(() => {
@@ -48,21 +49,19 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
     if (frameStateRef.current.currentScene !== currentSceneIndex) {
       frameStateRef.current.currentScene = currentSceneIndex;
       frameStateRef.current.currentFrame = targetFrameNumber;
+      frameStateRef.current.targetFrame = targetFrameNumber;
+    } else {
+      frameStateRef.current.targetFrame = targetFrameNumber;
     }
 
-    frameStateRef.current.targetFrame = targetFrameNumber;
     frameStateRef.current.isTransitioning = isTransitioning;
     frameStateRef.current.nextScene = nextSceneIndex;
     frameStateRef.current.transitionProgress = transitionProgress;
 
     if (isTransitioning && nextSceneIndex !== undefined) {
-      const nextScene = SCENES[nextSceneIndex];
-      if (nextScene) {
-        frameStateRef.current.nextFrame = Math.max(
-          1,
-          Math.min(nextScene.frameCount, Math.round(transitionProgress * (nextScene.frameCount * 0.15)) + 1)
-        );
-      }
+      // Hold next scene on frame 1 during incoming crossfade so when the boundary is crossed,
+      // it seamlessly matches frame 1 without rewinding or skipping frames!
+      frameStateRef.current.nextFrame = 1;
     }
 
     frameLoader.setActiveScene(currentSceneIndex);
@@ -101,8 +100,11 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
       let img = frameLoader.getFrameImage(scene.index, Math.round(frameNum));
       if (img && img.complete && img.naturalWidth > 0) {
         lastImagesRef.current[scene.index] = img;
+        lastRenderedImgRef.current = img;
       } else if (lastImagesRef.current[scene.index]) {
         img = lastImagesRef.current[scene.index];
+      } else if (lastRenderedImgRef.current) {
+        img = lastRenderedImgRef.current;
       }
       if (!img || !img.complete || img.naturalWidth === 0) return;
 
@@ -113,7 +115,7 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
       const imgAspect = imgW / imgH; // 720 / 1280 = 0.5625
 
       targetCtx.save();
-      targetCtx.globalAlpha = alpha;
+      targetCtx.globalAlpha = Math.max(0, Math.min(1, alpha));
 
       if (isMobile) {
         // Mobile portrait: fit cover with tuned object position
@@ -138,7 +140,7 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         targetCtx.drawImage(img, renderX, renderY, renderW, renderH);
       } else {
         // Desktop widescreen:
-        // 1. Draw subtle ambient blurred background extension to gracefully fill widescreen viewports
+        // 1. Draw subtle ambient background extension to gracefully fill widescreen viewports
         const bgScale = Math.max(cWidth / imgW, cHeight / imgH) * 1.05;
         const bgW = imgW * bgScale;
         const bgH = imgH * bgScale;
@@ -146,16 +148,14 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         const bgY = (cHeight - bgH) * 0.5;
 
         targetCtx.save();
-        targetCtx.filter = 'blur(30px) brightness(0.28) contrast(1.1)';
+        targetCtx.globalAlpha = Math.max(0, Math.min(1, alpha)) * 0.22;
         targetCtx.drawImage(img, bgX, bgY, bgW, bgH);
         targetCtx.restore();
 
         // 2. Foreground high-clarity hero frame
-        // On desktop, maintain vertical presentation with cinematic pillar framing or contained zoom
         let heroH = cHeight;
         let heroW = cHeight * imgAspect;
 
-        // If screen is wider than standard, allow subtle scale
         const scale = config.scale || 1.0;
         heroW *= scale;
         heroH *= scale;
@@ -175,14 +175,14 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         const fadeWidth = Math.max(20, (cWidth - heroW) * 0.5);
         if (fadeWidth > 0) {
           const leftGrad = targetCtx.createLinearGradient(heroX - 2, 0, heroX + 45, 0);
-          leftGrad.addColorStop(0, 'rgba(2, 5, 3, 0.95)');
+          leftGrad.addColorStop(0, `rgba(2, 5, 3, ${alpha * 0.95})`);
           leftGrad.addColorStop(1, 'rgba(2, 5, 3, 0)');
           targetCtx.fillStyle = leftGrad;
           targetCtx.fillRect(heroX - 2, 0, 47, cHeight);
 
           const rightGrad = targetCtx.createLinearGradient(heroX + heroW - 45, 0, heroX + heroW + 2, 0);
           rightGrad.addColorStop(0, 'rgba(2, 5, 3, 0)');
-          rightGrad.addColorStop(1, 'rgba(2, 5, 3, 0.95)');
+          rightGrad.addColorStop(1, `rgba(2, 5, 3, ${alpha * 0.95})`);
           targetCtx.fillStyle = rightGrad;
           targetCtx.fillRect(heroX + heroW - 45, 0, 47, cHeight);
         }
@@ -208,15 +208,15 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         ctx.fillStyle = '#020503';
         ctx.fillRect(0, 0, width, height);
 
-        // If in transition between scenes, draw both with crossfade
+        // If in transition between scenes, draw solid base and seamlessly blend next scene on top
         if (state.isTransitioning && state.nextScene !== undefined && SCENES[state.nextScene]) {
           const nextScene = SCENES[state.nextScene];
           const t = Math.max(0, Math.min(1, state.transitionProgress));
 
-          // Draw current scene fading out
-          drawSceneFrame(currentScene, state.currentFrame, ctx, width, height, 1.0 - t);
-          // Draw next scene fading in
-          drawSceneFrame(nextScene, state.nextFrame, ctx, width, height, t);
+          // Draw current scene as solid base (prevents alpha dips or darkness flashes)
+          drawSceneFrame(currentScene, state.currentFrame, ctx, width, height, 1.0);
+          // Draw next scene opening frame (frame 1) fading in smoothly on top
+          drawSceneFrame(nextScene, 1, ctx, width, height, t);
         } else {
           // Standard single scene render
           drawSceneFrame(currentScene, state.currentFrame, ctx, width, height, 1.0);
