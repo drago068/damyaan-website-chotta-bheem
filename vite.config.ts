@@ -22,6 +22,15 @@ export default defineConfig({
           }
           next();
         });
+      },
+      closeBundle() {
+        const src = path.resolve(__dirname, 'frames');
+        const dest = path.resolve(__dirname, 'dist', 'frames');
+        if (fs.existsSync(src)) {
+          console.log('Copying frames to dist/frames...');
+          fs.cpSync(src, dest, { recursive: true });
+          console.log('Frames successfully copied to dist/frames.');
+        }
       }
     }
   ],
