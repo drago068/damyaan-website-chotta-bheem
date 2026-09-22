@@ -9,6 +9,7 @@ import { Navigation } from './components/Navigation';
 import { SceneProgressDots } from './components/SceneProgressDots';
 import { Preloader } from './components/Preloader';
 import { useLenis } from './hooks/useLenis';
+import { soundEngine } from './utils/soundEngine';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -72,6 +73,24 @@ export const App: React.FC = () => {
     };
   }, [isLoaded]);
 
+  // Unlock background audio on first interaction or once loaded
+  useEffect(() => {
+    if (isLoaded) {
+      soundEngine.play();
+    }
+    const unlockAudio = () => {
+      soundEngine.play();
+    };
+    window.addEventListener('click', unlockAudio, { once: true });
+    window.addEventListener('touchstart', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
+    };
+  }, [isLoaded]);
+
   const handleSelectScene = useCallback(
     (index: number) => {
       const sectionEl = document.getElementById(`scene-trigger-${index}`);
@@ -83,6 +102,7 @@ export const App: React.FC = () => {
   );
 
   const handleRestart = useCallback(() => {
+    soundEngine.restartFromBeginning();
     handleSelectScene(0);
   }, [handleSelectScene]);
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Volume2, VolumeX, Menu, X, ShieldAlert } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
 import { SCENES } from '../scenes/sceneData';
@@ -16,6 +16,14 @@ export const Navigation: React.FC<NavigationProps> = ({
 }) => {
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setIsAudioActive(soundEngine.getIsPlaying());
+    const unsub = soundEngine.subscribe((playing) => {
+      setIsAudioActive(playing);
+    });
+    return unsub;
+  }, []);
 
   const toggleSound = () => {
     const active = soundEngine.toggle();

@@ -31,6 +31,11 @@ export default defineConfig({
           fs.cpSync(src, dest, { recursive: true });
           console.log('Frames successfully copied to dist/frames.');
         }
+        const audioSrc = path.resolve(__dirname, 'audio.mpeg');
+        const audioDest = path.resolve(__dirname, 'dist', 'audio.mpeg');
+        if (fs.existsSync(audioSrc) && !fs.existsSync(audioDest)) {
+          fs.copyFileSync(audioSrc, audioDest);
+        }
       }
     }
   ],
