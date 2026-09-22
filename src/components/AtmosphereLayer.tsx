@@ -142,9 +142,13 @@ export const AtmosphereLayer: React.FC<AtmosphereLayerProps> = ({
   return (
     <div
       style={{
-        position: 'absolute',
-        inset: 0,
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100svh',
         pointerEvents: 'none',
+        touchAction: 'pan-y',
         zIndex: 20,
         overflow: 'hidden',
       }}
@@ -157,6 +161,7 @@ export const AtmosphereLayer: React.FC<AtmosphereLayerProps> = ({
           inset: 0,
           width: '100%',
           height: '100%',
+          pointerEvents: 'none',
         }}
       />
 

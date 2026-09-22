@@ -27,7 +27,35 @@ export const App: React.FC = () => {
 
   // Set up ScrollTrigger instances for each scene
   useEffect(() => {
-    if (!isLoaded) return;
+    ScrollTrigger.config({ ignoreMobileResize: true });
+
+    // Direct native scroll listener to guarantee 100% responsive frame updating on mobile touch
+    const handleNativeScroll = () => {
+      for (let i = 0; i < SCENES.length; i++) {
+        const el = document.getElementById(`scene-trigger-${i}`);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= 2 && rect.bottom > 0) {
+          const totalDist = rect.height;
+          const prog = Math.max(0, Math.min(1, -rect.top / totalDist));
+          setCurrentSceneIndex(i);
+          setSceneProgress(prog);
+
+          if (prog > 0.88 && i < SCENES.length - 1) {
+            setIsTransitioning(true);
+            setNextSceneIndex(i + 1);
+            setTransitionProgress((prog - 0.88) / 0.12);
+          } else {
+            setIsTransitioning(false);
+            setNextSceneIndex(undefined);
+            setTransitionProgress(0);
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleNativeScroll, { passive: true });
 
     const timer = setTimeout(() => {
       ScrollTrigger.refresh();
@@ -66,6 +94,7 @@ export const App: React.FC = () => {
 
     return () => {
       clearTimeout(timer);
+      window.removeEventListener('scroll', handleNativeScroll);
       ScrollTrigger.getAll().forEach((st) => st.kill());
     };
   }, [isLoaded]);

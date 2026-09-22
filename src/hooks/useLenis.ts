@@ -15,14 +15,30 @@ export function useLenis() {
       return;
     }
 
+    const isTouch =
+      typeof window !== 'undefined' &&
+      ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.innerWidth < 768);
+
+    // On touch devices, preserve native browser momentum scrolling and do not hijack touch
+    if (isTouch) {
+      const handleNativeScroll = () => {
+        ScrollTrigger.update();
+      };
+      window.addEventListener('scroll', handleNativeScroll, { passive: true });
+      return () => {
+        window.removeEventListener('scroll', handleNativeScroll);
+      };
+    }
+
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       orientation: 'vertical',
       gestureOrientation: 'vertical',
       smoothWheel: true,
+      syncTouch: false,
       wheelMultiplier: 0.9,
-      touchMultiplier: 1.5,
+      touchMultiplier: 0,
     });
 
     lenisRef.current = lenis;

@@ -244,6 +244,7 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         height: '100svh',
         zIndex: 10,
         pointerEvents: 'none',
+        touchAction: 'pan-y',
         overflow: 'hidden',
       }}
     >
@@ -253,6 +254,8 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
           width: '100%',
           height: '100%',
           display: 'block',
+          pointerEvents: 'none',
+          touchAction: 'pan-y',
         }}
       />
     </div>
