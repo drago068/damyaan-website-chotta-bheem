@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, VolumeX, Menu, X, ShieldAlert } from 'lucide-react';
+import { Volume2, VolumeX, Menu, X, ShieldAlert, Play, Pause } from 'lucide-react';
 import { soundEngine } from '../utils/soundEngine';
 import { SCENES } from '../scenes/sceneData';
 
@@ -7,12 +7,16 @@ interface NavigationProps {
   currentSceneIndex: number;
   totalScenes: number;
   onSelectScene: (index: number) => void;
+  isAutoScrolling: boolean;
+  onToggleAutoScroll: () => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   currentSceneIndex,
   totalScenes,
   onSelectScene,
+  isAutoScrolling,
+  onToggleAutoScroll,
 }) => {
   const [isAudioActive, setIsAudioActive] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -82,15 +86,46 @@ export const Navigation: React.FC<NavigationProps> = ({
           </p>
         </div>
 
-        {/* Top-Right: Sound toggle and Menu */}
+        {/* Top-Right: Auto Tour, Sound toggle and Menu */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.85rem',
+            gap: '0.75rem',
             pointerEvents: 'auto',
           }}
         >
+          {/* Auto Scroll / Cinematic Tour Button */}
+          <button
+            onClick={onToggleAutoScroll}
+            id="btn-auto-scroll"
+            aria-label={isAutoScrolling ? 'Pause Cinematic Auto Scroll' : 'Start Cinematic Auto Scroll'}
+            title={isAutoScrolling ? 'Pause Auto Scroll' : 'Auto Scroll Through Lair'}
+            style={{
+              backgroundColor: isAutoScrolling ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+              border: `1px solid ${isAutoScrolling ? 'rgba(52, 211, 153, 0.7)' : 'rgba(255, 255, 255, 0.12)'}`,
+              borderRadius: '20px',
+              height: '38px',
+              padding: '0 0.95rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              cursor: 'pointer',
+              color: isAutoScrolling ? '#6ee7b7' : '#e2e8f0',
+              backdropFilter: 'blur(8px)',
+              transition: 'all 0.25s ease',
+              fontFamily: "'Cinzel', serif",
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              boxShadow: isAutoScrolling ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+            }}
+          >
+            {isAutoScrolling ? <Pause size={13} fill="#6ee7b7" /> : <Play size={13} fill="#e2e8f0" />}
+            <span className="hidden sm:inline">{isAutoScrolling ? 'PAUSE' : 'AUTO TOUR'}</span>
+          </button>
+
           {/* Audio Ambient Toggle */}
           <button
             onClick={toggleSound}

@@ -20,15 +20,15 @@ export const App: React.FC = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [nextSceneIndex, setNextSceneIndex] = useState<number | undefined>(undefined);
   const [transitionProgress, setTransitionProgress] = useState(0);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
 
-  const { scrollTo } = useLenis();
+  const { lenis, scrollTo } = useLenis();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Set up ScrollTrigger instances for each scene
   useEffect(() => {
     if (!isLoaded) return;
 
-    // Small delay to ensure layout has calculated
     const timer = setTimeout(() => {
       ScrollTrigger.refresh();
 
@@ -44,13 +44,10 @@ export const App: React.FC = () => {
           onUpdate: (self) => {
             const prog = self.progress;
 
-            // When this scene is active
             if (self.isActive) {
               setCurrentSceneIndex(index);
               setSceneProgress(prog);
 
-              // Boundary transition logic:
-              // When progress is between 0.88 and 1.0 and there is a next scene, initiate soft dissolve crossfade
               if (prog > 0.88 && index < SCENES.length - 1) {
                 setIsTransitioning(true);
                 setNextSceneIndex(index + 1);
@@ -102,9 +99,64 @@ export const App: React.FC = () => {
   );
 
   const handleRestart = useCallback(() => {
+    setIsAutoScrolling(false);
     soundEngine.restartFromBeginning();
     handleSelectScene(0);
   }, [handleSelectScene]);
+
+  // Auto-scroll loop
+  useEffect(() => {
+    if (!isAutoScrolling) return;
+
+    let animId: number;
+    const speed = 1.85; // Cinematic descent velocity in pixels per frame
+
+    const step = () => {
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (window.scrollY >= maxScroll - 8) {
+        setIsAutoScrolling(false);
+        return;
+      }
+
+      if (lenis) {
+        lenis.scrollTo(window.scrollY + speed, { immediate: true });
+      } else {
+        window.scrollBy(0, speed);
+      }
+
+      animId = requestAnimationFrame(step);
+    };
+
+    animId = requestAnimationFrame(step);
+
+    // Pause auto-scroll if user manually scrolls or drags
+    const handleUserIntervention = () => {
+      setIsAutoScrolling(false);
+    };
+
+    window.addEventListener('wheel', handleUserIntervention, { passive: true });
+    window.addEventListener('touchmove', handleUserIntervention, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('wheel', handleUserIntervention);
+      window.removeEventListener('touchmove', handleUserIntervention);
+    };
+  }, [isAutoScrolling, lenis]);
+
+  const toggleAutoScroll = useCallback(() => {
+    setIsAutoScrolling((prev) => {
+      const next = !prev;
+      if (next) {
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        if (window.scrollY >= maxScroll - 30) {
+          handleRestart();
+          return true;
+        }
+      }
+      return next;
+    });
+  }, [handleRestart]);
 
   const activeScene = SCENES[currentSceneIndex] || SCENES[0];
 
@@ -138,11 +190,13 @@ export const App: React.FC = () => {
         vignetteStrength={activeScene.vignetteStrength}
       />
 
-      {/* Minimal HUD Navigation */}
+      {/* Minimal HUD Navigation with Auto Tour toggle */}
       <Navigation
         currentSceneIndex={currentSceneIndex}
         totalScenes={SCENES.length}
         onSelectScene={handleSelectScene}
+        isAutoScrolling={isAutoScrolling}
+        onToggleAutoScroll={toggleAutoScroll}
       />
 
       {/* Right Rail Scene Progress Indicator */}
