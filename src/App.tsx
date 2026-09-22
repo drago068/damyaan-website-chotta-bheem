@@ -109,7 +109,7 @@ export const App: React.FC = () => {
     if (!isAutoScrolling) return;
 
     let animId: number;
-    const speed = 1.85; // Cinematic descent velocity in pixels per frame
+    const speed = 2.85; // Calibrated swift cinematic velocity (~38 FPS playback)
 
     const step = () => {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
