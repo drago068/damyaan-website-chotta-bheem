@@ -199,7 +199,7 @@ export const CinematicViewport: React.FC<CinematicViewportProps> = ({
         // Smooth frame interpolation (lerp)
         const frameDiff = state.targetFrame - state.currentFrame;
         // Fast yet smooth response
-        state.currentFrame += frameDiff * 0.45;
+        state.currentFrame += frameDiff * 0.65;
         if (Math.abs(frameDiff) < 0.05) {
           state.currentFrame = state.targetFrame;
         }
